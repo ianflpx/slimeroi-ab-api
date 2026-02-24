@@ -16,6 +16,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    // CORREÇÃO: Vercel Edge Config não aceita "." em chaves (keys). 
+    // Substituímos pontos por underscores para garantir a compatibilidade.
+    const safeDomainKey = domain.replace(/\./g, '_');
+
     const vercelToken = process.env.VERCEL_TOKEN;
     const edgeConfigId = process.env.EDGE_CONFIG_ID;
 
@@ -24,9 +28,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
-        // 1. Get current items to find the one to update (or we can just PATCH directly if we know the structure)
-        // Vercel API for Edge Config items: https://vercel.com/docs/rest-api/endpoints#patch-edge-config-items
-
         const response = await fetch(
             `https://api.vercel.com/v1/edge-config/${edgeConfigId}/items`,
             {
@@ -39,7 +40,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     items: [
                         {
                             operation: 'upsert',
-                            key: domain,
+                            key: safeDomainKey, // Usando a chave limpa sem pontos
                             value: {
                                 urlA,
                                 urlB,
