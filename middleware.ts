@@ -23,32 +23,35 @@ interface DomainConfig {
 
 export async function middleware(request: NextRequest) {
   const host = request.headers.get('host') || '';
-  const domain = host.split(':')[0]; // Get domain without port
+  const domain = host.split(':')[0]; // Obtém o domínio sem a porta
   
-  // Try to fetch configuration for this domain from Edge Config
-  const domainConfig = await get<DomainConfig>(domain);
+  // CORREÇÃO: Converte pontos em underscores para coincidir com a chave salva no Edge Config
+  const safeKey = domain.replace(/\./g, '_');
+
+  // Tenta buscar a configuração para este domínio usando a chave segura
+  const domainConfig = await get<DomainConfig>(safeKey);
 
   if (!domainConfig || !domainConfig.urlA || !domainConfig.urlB) {
     return NextResponse.next();
   }
 
-  const cookieName = `sr_variant_${domain.replace(/\./g, '_')}`;
+  const cookieName = `sr_variant_${safeKey}`;
   let variant = request.cookies.get(cookieName)?.value;
 
   if (!variant) {
-    // If no variant cookie, perform A/B split
+    // Se não houver cookie, realiza o split A/B
     const random = Math.random();
     variant = random < (domainConfig.split || 0.5) ? 'A' : 'B';
   }
 
   const targetUrl = variant === 'A' ? domainConfig.urlA : domainConfig.urlB;
   
-  // Use rewrite to serve content from targetUrl without changing browser URL
+  // Mantém a URL original no navegador (Rewrite) e preserva path e UTMs
   const response = NextResponse.rewrite(new URL(targetUrl + request.nextUrl.pathname + request.nextUrl.search));
 
-  // Save selection in a cookie
+  // Salva a variante no cookie para manter a consistência do teste
   response.cookies.set(cookieName, variant, {
-    maxAge: 60 * 60 * 24 * 30, // 30 days
+    maxAge: 60 * 60 * 24 * 30, // 30 dias
     path: '/',
   });
 
